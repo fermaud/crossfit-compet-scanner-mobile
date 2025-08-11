@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,11 @@ import {
 import dayjs from 'dayjs';
 import { EventFilters, EventItem, FetchEventResponse } from '../types/Event';
 import { fetchEvents } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
+import FilterModal from '../components/FilterModal';
 
 const INITIAL_FILTERS: EventFilters = {
   page: 1,
-  size: 20,
+  size: 10,
 };
 
 const TYPES = {
@@ -32,27 +32,88 @@ const SOURCES = {
 };
 
 export default function EventListScreen() {
-  const { user } = useAuth();
   const [filters, setFilters] = useState<EventFilters>(INITIAL_FILTERS);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Load events on component mount
   useEffect(() => {
     loadEvents();
-  }, [filters.name]);
+  }, []);
 
-  const loadEvents = async (isRefresh = false) => {
+  // Debounced search effect
+  useEffect(() => {
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set new timeout for search
+    searchTimeoutRef.current = setTimeout(() => {
+      setFilters(prev => ({ ...prev, name: searchText, page: 1 }));
+      // Reset events when search changes
+      setEvents([]);
+    }, 500); // 1000ms delay
+
+    // Cleanup timeout on component unmount
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchText]);
+
+  // Load events when filters change (except searchText which is handled above)
+  useEffect(() => {
+    loadEvents(false, filters.page > 1);
+  }, [
+    filters.name, 
+    filters.page, 
+    filters.duration, 
+    filters.source, 
+    filters.startDate, 
+    filters.endDate, 
+    filters.selectedDepartements
+  ]);
+
+  const loadEvents = async (isRefresh = false, isLoadMore = false) => {
     if (isRefresh) {
       setRefreshing(true);
+    } else if (isLoadMore) {
+      setLoadingMore(true);
     } else {
       setLoading(true);
     }
 
     try {
       const response: FetchEventResponse = await fetchEvents(filters);
-      setEvents(response.results);
+      
+      if (isRefresh || filters.page === 1) {
+        // Replace events for refresh or first page
+        setEvents(response.results);
+      } else {
+        // Append events for pagination, but filter out duplicates
+        setEvents(prevEvents => {
+          const existingIds = new Set(prevEvents.map(event => event._id));
+          const newEvents = response.results.filter(event => !existingIds.has(event._id));
+          
+          // If no new events were returned, we've reached the end
+          if (newEvents.length === 0 && response.results.length === 0) {
+            // Update total count to current count to stop infinite loading
+            setTotalCount(prevEvents.length);
+            return prevEvents;
+          }
+          
+          return [...prevEvents, ...newEvents];
+        });
+      }
+      
       setTotalCount(response.count);
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -60,11 +121,90 @@ export default function EventListScreen() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   };
 
   const handleSearch = (text: string) => {
-    setFilters(prev => ({ ...prev, name: text, page: 1 }));
+    setSearchText(text);
+  };
+
+  const handleApplyFilters = (newFilters: EventFilters) => {
+    setFilters(newFilters);
+    setEvents([]); // Clear events when applying new filters
+  };
+
+  const getActiveFiltersCount = () => {
+    let count = 0;
+    if (filters.duration && filters.duration !== 'ALL') count++;
+    if (filters.source && filters.source !== 'ALL') count++;
+    if (filters.startDate) count++;
+    if (filters.endDate) count++;
+    if (filters.selectedDepartements && filters.selectedDepartements.length > 0) count++;
+    return count;
+  };
+
+  const loadMoreEvents = () => {
+    // Check if we have more events to load
+    const hasMoreEvents = events.length < totalCount;
+    
+    // Prevent loading if already loading or if we have all events
+    if (!hasMoreEvents || loadingMore || loading) {
+      return;
+    }
+    
+    // Calculate maximum possible pages
+    const maxPossiblePages = Math.ceil(totalCount / filters.size);
+    if (filters.page >= maxPossiblePages) {
+      // Force end by setting totalCount to current events length
+      setTotalCount(events.length);
+      return;
+    }
+    
+    // Additional check: if we're very close to the total, be more careful
+    const remainingEvents = totalCount - events.length;
+    if (remainingEvents <= 0) {
+      setTotalCount(events.length);
+      return;
+    }
+    
+    // Only load if we haven't exceeded reasonable limits
+    const nextPage = filters.page + 1;
+    if (nextPage > 20) { // Safety limit - max 20 pages (200 events with size 10)
+      setTotalCount(events.length);
+      return;
+    }
+    
+    setFilters(prev => ({ ...prev, page: nextPage }));
+  };
+
+  const renderFooter = () => {
+    // Show loading indicator when loading more
+    if (loadingMore) {
+      return (
+        <View style={styles.footerLoader}>
+          <ActivityIndicator size="small" color="#3B82F6" />
+          <Text style={styles.footerText}>Chargement...</Text>
+        </View>
+      );
+    }
+
+    // Show end of list indicator when all events are loaded
+    if (events.length > 0 && events.length >= totalCount && totalCount > 0) {
+      return (
+        <View style={styles.endOfListContainer}>
+          <View style={styles.endOfListLine} />
+          <Text style={styles.endOfListText}>
+            🏁 Fin de la liste • {totalCount} événement{totalCount > 1 ? 's' : ''} au total
+          </Text>
+          <View style={styles.endOfListLine} />
+        </View>
+      );
+    }
+
+
+
+    return null;
   };
 
   const openEventLink = (url: string) => {
@@ -154,22 +294,32 @@ export default function EventListScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>CrossFit Events</Text>
-        <Text style={styles.subtitle}>
-          {user ? 'Mode connecté' : 'Mode invité'}
-        </Text>
+        <Text style={styles.headerTitle}>CrossFit Event Scanner</Text>
       </View>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher un événement"
-          placeholderTextColor="#9CA3AF"
-          value={filters.name || ''}
-          onChangeText={handleSearch}
-        />
+      {/* Search and Filter */}
+      <View style={styles.searchFilterContainer}>
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher un événement"
+            placeholderTextColor="#9CA3AF"
+            value={searchText}
+            onChangeText={handleSearch}
+          />
+        </View>
+        <TouchableOpacity 
+          style={styles.filterButton} 
+          onPress={() => setShowFilterModal(true)}
+        >
+          <Text style={styles.filterIcon}>⚙️</Text>
+          {getActiveFiltersCount() > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{getActiveFiltersCount()}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Results count */}
@@ -189,20 +339,34 @@ export default function EventListScreen() {
         <FlatList
           data={events}
           renderItem={renderEventItem}
-          keyExtractor={(item) => item._id.toString()}
+          keyExtractor={(item, index) => `${item._id}-${index}`}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => loadEvents(true)}
+              onRefresh={() => {
+                setFilters(prev => ({ ...prev, page: 1 }));
+                loadEvents(true);
+              }}
               tintColor="#3B82F6"
               colors={['#3B82F6']}
             />
           }
+          onEndReached={loadMoreEvents}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={renderFooter}
           ListEmptyComponent={!loading ? renderEmptyState : null}
         />
       )}
+
+      {/* Filter Modal */}
+      <FilterModal
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        filters={filters}
+        onApplyFilters={handleApplyFilters}
+      />
     </View>
   );
 }
@@ -212,6 +376,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#111827',
   },
+
   header: {
     backgroundColor: '#374151',
     padding: 16,
@@ -221,24 +386,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#F9FAFB',
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    marginTop: 4,
+  searchFilterContainer: {
+    flexDirection: 'row',
+    margin: 16,
+    gap: 12,
   },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#374151',
     borderRadius: 8,
-    margin: 16,
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#4B5563',
+  },
+  filterButton: {
+    backgroundColor: '#374151',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 48,
+    position: 'relative',
+  },
+  filterIcon: {
+    fontSize: 18,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   searchIcon: {
     fontSize: 16,
@@ -386,5 +581,35 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 14,
     textAlign: 'center',
+  },
+  footerLoader: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  endOfListContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    marginTop: 16,
+  },
+  endOfListLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#374151',
+  },
+  endOfListText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

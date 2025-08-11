@@ -6,29 +6,37 @@ A React Native mobile application built with Expo that displays CrossFit competi
 
 ### 📱 Core Functionality
 - **Event Listing** - Browse all CrossFit competitions in France
-- **Search & Filter** - Find events by name, location, type, and duration
+- **Advanced Search** - Find events by name with debounced search (1 second delay)
+- **Comprehensive Filters** - Filter by département, duration, date range, and source
 - **Event Details** - View competition information, dates, and locations
 - **External Links** - Direct access to event registration and location maps
+- **Infinite Scroll** - Load events 10 by 10 with smooth pagination
+- **End-of-List Indicator** - Clear visual feedback when all events are loaded
 
-### 🔐 Authentication (Optional)
-- **Guest Mode** - Full access to event browsing without login
-- **User Authentication** - Powered by Supabase for enhanced features
-- **Sidebar Login** - Convenient drawer-based authentication
+### 🔍 Advanced Filtering System
+- **Département Filter** - Select specific French départements with searchable list
+- **Duration Filter** - Filter by event duration (1, 2, or 3+ days)
+- **Date Range** - Set minimum and maximum dates for events
+- **Source Filter** - Filter by data source (ScoringFit, CompetitionCorner)
+- **Filter Badge** - Visual indicator showing number of active filters
+- **Quick Reset** - Easy filter clearing functionality
 
 ### 🎨 User Experience
-- **Dark Theme** - Modern, eye-friendly interface
-- **Drawer Navigation** - Intuitive sidebar menu
+- **Dark Theme** - Modern, eye-friendly interface optimized for mobile
+- **Clean Header** - Professional app branding
+- **Responsive Design** - Optimized for all screen sizes
 - **Pull-to-Refresh** - Easy data updates
 - **Native Performance** - Smooth animations and gestures
+- **Loading States** - Clear feedback during data fetching
 
 ## 🚀 Tech Stack
 
 - **React Native** with Expo SDK 53
 - **TypeScript** for type safety
-- **React Navigation** for drawer and stack navigation
-- **Supabase** for authentication
-- **AsyncStorage** for local data persistence
-- **React Native Reanimated** for smooth animations
+- **React Native DateTimePicker** for date selection
+- **Dayjs** for date formatting and manipulation
+- **Custom API Integration** with debounced requests
+- **Optimized FlatList** with infinite scroll pagination
 
 ## 📋 Prerequisites
 
@@ -54,12 +62,11 @@ A React Native mobile application built with Expo that displays CrossFit competi
 3. **Configure environment variables**
    Create a `.env` file in the root directory:
    ```env
-   # Backend API URL
-   EXPO_PUBLIC_BACKEND_URL=http://your-backend-url:3030
+   # Backend API URL - Use your computer's IP address for mobile testing
+   EXPO_PUBLIC_BACKEND_URL=http://192.168.1.XXX:3030
    
-   # Supabase configuration
-   EXPO_PUBLIC_SUPABASE_URL=your-supabase-url
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+   # For production deployment
+   # EXPO_PUBLIC_BACKEND_URL=https://your-production-backend.com
    ```
 
 4. **Start the development server**
@@ -77,17 +84,11 @@ A React Native mobile application built with Expo that displays CrossFit competi
 ```
 src/
 ├── components/          # Reusable UI components
-│   └── CustomDrawerContent.tsx
-├── config/             # Configuration files
-│   └── supabase.ts
-├── hooks/              # Custom React hooks
-│   └── useAuth.ts
-├── navigation/         # Navigation setup
-│   └── AppNavigator.tsx
+│   └── FilterModal.tsx
+├── data/               # Static data files
+│   └── departements.ts
 ├── screens/            # Screen components
-│   ├── EventListScreen.tsx
-│   ├── HomeScreen.tsx
-│   └── LoginScreen.tsx
+│   └── EventListScreen.tsx
 ├── services/           # API services
 │   └── api.ts
 └── types/              # TypeScript type definitions
@@ -99,36 +100,51 @@ src/
 ### Backend Connection
 The app connects to the CrossFit Competition Scanner backend. Make sure:
 - Backend server is running on the configured URL
-- CORS is properly configured to allow mobile requests
-- API endpoints are accessible
-
-### Supabase Setup
-1. Create a Supabase project
-2. Enable authentication
-3. Add your URL and anon key to the `.env` file
+- CORS is properly configured to allow mobile requests (no origin header)
+- API endpoints are accessible from your mobile device
+- Use your computer's local IP address (not localhost) for mobile testing
 
 ## 📱 Usage
 
-### Guest Mode
-- Open the app to immediately see CrossFit events
-- Search and browse without authentication
-- Tap event links to visit registration pages
-- Tap locations to open in maps
+### Event Browsing
+- **Immediate Access** - Events load automatically on app launch
+- **Search Events** - Type in the search bar (1-second delay for optimization)
+- **Infinite Scroll** - Scroll down to load more events (10 at a time)
+- **Event Details** - Tap event links to visit registration pages
+- **Location Links** - Tap locations to open in maps app
 
-### Authenticated Mode
-- Swipe from left to open sidebar menu
-- Login with your credentials
-- Access enhanced features (when implemented)
+### Advanced Filtering
+- **Filter Button** - Tap the ⚙️ icon next to the search bar
+- **Département Selection** - Choose specific French départements
+- **Duration Filter** - Filter by 1, 2, or 3+ day events
+- **Date Range** - Set minimum and maximum event dates
+- **Source Filter** - Filter by ScoringFit or CompetitionCorner
+- **Active Filters** - Red badge shows number of active filters
+- **Reset Filters** - Clear all filters with one tap
 
 ## 🚀 Building for Production
 
-### iOS
+### EAS Build (Recommended)
 ```bash
-expo build:ios
+# Install EAS CLI
+npm install -g @expo/eas-cli
+
+# Configure EAS
+eas build:configure
+
+# Build for iOS
+eas build --platform ios
+
+# Build for Android
+eas build --platform android
 ```
 
-### Android
+### Legacy Expo Build
 ```bash
+# iOS
+expo build:ios
+
+# Android
 expo build:android
 ```
 
@@ -146,14 +162,35 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Related Projects
 
-- [CrossFit Competition Scanner Web](https://github.com/yourusername/crossfit-compet-scanner) - The web version
-- [CrossFit Competition Backend](https://github.com/yourusername/crossfit-compet-alert-backend) - The API backend
+- [CrossFit Competition Scanner Web](https://github.com/fermaud/crossfit-compet-scanner) - The Nuxt.js web version
+- [CrossFit Competition Backend](https://github.com/yourusername/crossfit-compet-alert-backend) - The Node.js API backend
 
 ## 📞 Support
 
 If you encounter any issues or have questions:
 - Open an issue on GitHub
-- Check the [troubleshooting guide](#troubleshooting)
+- Check that your backend is running and accessible
+- Ensure your mobile device is on the same network as your backend
+- Verify CORS configuration allows requests without origin header
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**Network Request Failed**
+- Check that backend is running on the configured URL
+- Use your computer's IP address instead of localhost
+- Verify CORS configuration allows mobile requests
+
+**Events Not Loading**
+- Ensure backend API is accessible from mobile device
+- Check network connectivity
+- Verify API endpoints return correct data format
+
+**Filters Not Working**
+- Check that backend supports all filter parameters
+- Verify date format in API requests (YYYY-MM-DD)
+- Ensure département numbers are correctly formatted
 
 ## 🙏 Acknowledgments
 

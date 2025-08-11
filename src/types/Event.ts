@@ -35,3 +35,22 @@ export interface FetchEventResponse {
   results: EventItem[];
   count: number;
 }
+
+export const eventDurations: Array<{
+  value: EventDuration;
+  label: string;
+}> = [
+  { value: 'ALL', label: 'Toutes' },
+  { value: '1', label: '1 jour' },
+  { value: '2', label: '2 jours' },
+  { value: '3', label: '3+ jours' },
+];
+
+export const sourceValues: Array<{
+  value: Source;
+  label: string;
+}> = [
+  { value: 'ALL', label: 'Toutes' },
+  { value: 'scoringFit', label: 'ScoringFit' },
+  { value: 'competitionCorner', label: 'CompetitionCorner' },
+];

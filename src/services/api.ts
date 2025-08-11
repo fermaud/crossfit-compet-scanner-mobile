@@ -19,10 +19,8 @@ export const fetchEvents = async (filters: EventFilters): Promise<FetchEventResp
       }
     }
   });
-  console.log(`${BACKEND_URL}?${queryParams.toString()}`);
 
   const response = await fetch(`${BACKEND_URL}?${queryParams.toString()}`);
-  console.log(response);
   if (!response.ok) {
     throw new Error('Failed to fetch events');
   }
